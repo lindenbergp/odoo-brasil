@@ -3,7 +3,8 @@
 # © 2016 Danimar Ribeiro, Trustcode
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
-from odoo import api, fields, models
+from odoo import api, fields, models, _
+from odoo.exceptions import UserError
 from odoo.addons import decimal_precision as dp
 
 
@@ -37,6 +38,12 @@ class AccountInvoice(models.Model):
         self.ii_value = sum(l.ii_valor for l in lines)
         self.total_bruto = sum(l.valor_bruto for l in lines)
         self.total_desconto = sum(l.valor_desconto for l in lines)
+        self.total_tributos_federais = sum(
+            l.tributos_estimados_federais for l in lines)
+        self.total_tributos_estaduais = sum(
+            l.tributos_estimados_estaduais for l in lines)
+        self.total_tributos_municipais = sum(
+            l.tributos_estimados_municipais for l in lines)
         self.total_tributos_estimados = sum(
             l.tributos_estimados for l in lines)
         # TOTAL
@@ -184,6 +191,21 @@ class AccountInvoice(models.Model):
         string='Valor II', store=True,
         digits=dp.get_precision('Account'), compute='_compute_amount',
         readonly=True)
+    total_tributos_federais = fields.Float(
+        string='Total de Tributos Federais',
+        store=True,
+        digits=dp.get_precision('Account'),
+        compute='_compute_amount')
+    total_tributos_estaduais = fields.Float(
+        string='Total de Tributos Estaduais',
+        store=True,
+        digits=dp.get_precision('Account'),
+        compute='_compute_amount')
+    total_tributos_municipais = fields.Float(
+        string='Total de Tributos Municipais',
+        store=True,
+        digits=dp.get_precision('Account'),
+        compute='_compute_amount')
     total_tributos_estimados = fields.Float(
         string='Total de Tributos',
         store=True,
@@ -211,6 +233,14 @@ class AccountInvoice(models.Model):
         if self.fiscal_position_id.fiscal_observation_ids:
             self.fiscal_observation_ids |= \
                 self.fiscal_position_id.fiscal_observation_ids
+
+    @api.multi
+    def action_invoice_cancel_paid(self):
+        if self.filtered(lambda inv: inv.state not in ['proforma2', 'draft',
+                                                       'open', 'paid']):
+            raise UserError(_("Invoice must be in draft, Pro-forma or open \
+                              state in order to be cancelled."))
+        return self.action_cancel()
 
     @api.model
     def invoice_line_move_line_get(self):
